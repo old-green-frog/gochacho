@@ -1,22 +1,12 @@
 package server
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
+	"text/template"
 
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
-)
-
-var ROLES = map[string]string{
-	"mech":    "Механик",
-	"main_ch": "Руководитель",
-	"caseer":  "Кассир-контролер",
-}
-
-const (
-	ROLE_QUERY = "SELECT id FROM adminroles WHERE val='%s'"
-	AUTH_QUERY = "SELECT * FROM admins WHERE serial_num='%s' AND role_id=(" + ROLE_QUERY + ")"
 )
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -40,30 +30,25 @@ func (s *Server) BuildRotes() {
 		http.ServeFile(w, r, "static/index.html")
 	}).Methods("GET")
 
-	s.router.HandleFunc("/usernf", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/usernf.html")
-	}).Methods("GET")
-
 	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 
-		number := r.Form.Get("number")
 		role := ""
-		rkey := ""
 
 		for key := range r.Form {
-			if key != "sign-button" && key != "number" {
-				rkey = key
-				role = ROLES[key]
+			if key != "sign-button" {
+				role = key
 			}
 		}
 
-		if auth(number, role, s.db) {
-			http.Redirect(w, r, rkey, http.StatusMovedPermanently)
-		} else {
-			http.Redirect(w, r, "usernf", http.StatusMovedPermanently)
-		}
+		http.Redirect(w, r, "/info/"+role, http.StatusMovedPermanently)
 	}).Methods("POST")
+
+	s.router.HandleFunc("/info/{role}", InfoHandler).Methods("GET", "POST")
+
+	reports := s.router.PathPrefix("/reports").Subrouter()
+	reports.HandleFunc("/{option}", ReportsHandler).Methods("GET", "POST")
+	reports.HandleFunc("/{option}/create", CreateReportHandler).Methods("CREATE")
 
 	s.router.NotFoundHandler = http.HandlerFunc(ServNotFoundHandler)
 	s.router.Use(loggingMiddleware)
@@ -71,18 +56,55 @@ func (s *Server) BuildRotes() {
 	http.Handle("/", s.router)
 }
 
-func auth(num, role string, db *sql.DB) bool {
-	if len(num) > 15 {
-		return false
-	}
-	err := db.QueryRow(fmt.Sprintf(AUTH_QUERY, num, role)).Scan()
-	if err != nil {
-		logrus.Warn(err)
-		return false
-	}
-	return true
-}
-
 func ServNotFoundHandler(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "static/404.html")
+}
+
+func InfoHandler(w http.ResponseWriter, r *http.Request) {
+
+	key := mux.Vars(r)
+	role := key["role"]
+
+	if x := r.URL.Query().Get("option"); x == "" && r.Method == "GET" {
+		context := TemplateData{ROLES_OPTIONS[role]}
+		tmpl, _ := template.ParseFiles("static/info.html")
+		tmpl.Execute(w, context)
+		return
+	}
+
+	if r.Method == "POST" {
+		context := TemplateData{ROLES_OPTIONS[role]}
+		r.ParseForm()
+
+		option := ""
+		for key := range r.Form {
+			if key != "sign-button" {
+				option = key
+			}
+		}
+		var element TemplateOption
+		for _, el := range context.Options {
+			logrus.Info(el)
+			if el.Key == option && option != "" {
+				element = el
+			}
+		}
+		if element.Key != "" {
+			cook := &http.Cookie{
+				Name:  "is_date",
+				Value: fmt.Sprint(element.Date),
+				Path:  "/",
+			}
+			http.SetCookie(w, cook)
+			http.Redirect(w, r, fmt.Sprintf("/reports/%s", option), http.StatusFound)
+		}
+	}
+}
+
+func ReportsHandler(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func CreateReportHandler(w http.ResponseWriter, r *http.Request) {
+
 }
