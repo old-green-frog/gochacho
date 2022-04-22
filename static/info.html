@@ -10,27 +10,22 @@
 </head>
 <body>
     <main>
-        <h1>Форма входа для администраторов</h1>
+        <h1>Ведомости и отчеты</h1>
 
         <br><br>
 
-        <h3>Выберите свою роль:</h3>
+        <h3>Выберите отчет:</h3>
 
         <br>
 
         <form method="POST">
+            {{ range .Options }}
             <div class="form_radio_btn">
-                <input type="radio" name="main_ch" id="main_ch">
-                <label for="main_ch">Руководитель</label><br>
+                <input type="radio" name="{{ .Key }}" id="{{ .Key }}">
+                <label for="{{ .Key }}">{{ .Name }}</label><br>
             </div>
-            <div class="form_radio_btn">
-                <input type="radio" name="mech" id="mech">
-                <label for="mech">Механик</label><br>
-            </div>
-            <div class="form_radio_btn">
-                <input type="radio" name="caseer" id="caseer">
-                <label for="caseer">Кассир-контроллер</label><br>
-            </div><br>
+            {{ end }}
+            
             <input type="submit" name="sign-button" value="Отправить">
         </form>
     </main>
