@@ -25,6 +25,7 @@ func (s *Server) BuildRotes() {
 	statics.PathPrefix("/css").Handler(http.StripPrefix("/static/css/", http.FileServer(http.Dir("static/css"))))
 	statics.PathPrefix("/js").Handler(http.StripPrefix("/static/js/", http.FileServer(http.Dir("static/js"))))
 	statics.PathPrefix("/images").Handler(http.StripPrefix("/static/images/", http.FileServer(http.Dir("static/images"))))
+	s.router.PathPrefix("/favicon").Handler(http.FileServer(http.Dir("static/favicon")))
 
 	s.router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/index.html")
@@ -47,8 +48,8 @@ func (s *Server) BuildRotes() {
 	s.router.HandleFunc("/info/{role}", InfoHandler).Methods("GET", "POST")
 
 	reports := s.router.PathPrefix("/reports").Subrouter()
-	reports.HandleFunc("/{option}", ReportsHandler).Methods("GET", "POST")
-	reports.HandleFunc("/{option}/create", CreateReportHandler).Methods("CREATE")
+	reports.HandleFunc("/{option}", s.ReportsHandler).Methods("GET", "POST")
+	reports.HandleFunc("/{option}/create", CreateReportHandler).Methods("GET", "CREATE")
 
 	s.router.NotFoundHandler = http.HandlerFunc(ServNotFoundHandler)
 	s.router.Use(loggingMiddleware)
@@ -91,8 +92,8 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if element.Key != "" {
 			cook := &http.Cookie{
-				Name:  "is_date",
-				Value: fmt.Sprint(element.Date),
+				Name:  "role",
+				Value: role,
 				Path:  "/",
 			}
 			http.SetCookie(w, cook)
@@ -101,10 +102,131 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func ReportsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) ReportsHandler(w http.ResponseWriter, r *http.Request) {
 
+	key := mux.Vars(r)
+	roleCookie, err := r.Cookie("role")
+	if err != nil {
+		logrus.Error(err)
+		http.HandlerFunc(ServNotFoundHandler).ServeHTTP(w, r)
+		return
+	}
+
+	option := key["option"]
+	role := roleCookie.Value
+
+	switch r.Method {
+	case "GET":
+		{
+			context := ROLES_OPTIONS[role]
+			var element TemplateOption
+
+			for _, el := range context {
+				if el.Key == option {
+					element = el
+				}
+			}
+			if element.Name == "" {
+				logrus.Error(err)
+				http.HandlerFunc(ServNotFoundHandler).ServeHTTP(w, r)
+				return
+			}
+
+			IsNumber := false
+			if option == "defectlist" {
+				IsNumber = true
+			}
+
+			tempateContext := struct {
+				Title    string
+				IsDate   bool
+				Results  bool
+				IsNumber bool
+				Option   string
+				IsCreate bool
+			}{element.Name, element.Date, false, IsNumber, option, element.Create}
+
+			tmpl, _ := template.ParseFiles("static/view.html")
+			tmpl.Execute(w, tempateContext)
+			return
+		}
+
+	case "POST":
+		{
+			r.ParseForm()
+
+			var formData []string
+
+			for key, value := range r.Form {
+				if key != "sign-button" && key != "create-button" {
+					formData = append(formData, value[0])
+				}
+			}
+
+			context := ROLES_OPTIONS[role]
+			var element TemplateOption
+
+			for _, el := range context {
+				if el.Key == option {
+					element = el
+				}
+			}
+
+			titles, data := s.getReportData(option, formData)
+
+			IsNumber := false
+			if option == "defectlist" {
+				IsNumber = true
+			}
+
+			tempateContext := struct {
+				Title      string
+				IsDate     bool
+				Titles     []string
+				Data       [][]string
+				Results    bool
+				FirstDate  string
+				SecondDate string
+				IsNumber   bool
+				Option     string
+				IsCreate   bool
+			}{
+				element.Name,
+				element.Date,
+				titles,
+				data,
+				true,
+				formData[0],
+				"",
+				IsNumber,
+				option,
+				element.Create,
+			}
+
+			if len(formData) > 1 {
+				tempateContext.SecondDate = formData[1]
+			}
+			if len(data) == 0 && len(titles) != 0 {
+				tempateContext.Results = false
+			}
+
+			tmpl, _ := template.ParseFiles("static/view.html")
+			tmpl.Execute(w, tempateContext)
+		}
+	}
 }
 
 func CreateReportHandler(w http.ResponseWriter, r *http.Request) {
 
+	vars := mux.Vars(r)
+	option := vars["option"]
+
+	tempateContext := struct {
+		Titles []string
+	}{
+		TITLES[option],
+	}
+
+	tmpl, _ := template.ParseFiles("static/create.html")
+	tmpl.Execute(w, tempateContext)
 }
