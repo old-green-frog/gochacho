@@ -1,27 +1,27 @@
 package server
 
 import (
-	"database/sql"
 	"fmt"
 	"gochacho/pkg/conf"
 	"gochacho/pkg/migrate"
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
 	config *conf.Config
-	db     *sql.DB
+	db     *sqlx.DB
 	router *mux.Router
 }
 
 func New() *Server {
 
 	config := conf.New()
-	db, _ := sql.Open("postgres", config.DatabaseString)
+	db, _ := sqlx.Open("postgres", config.DatabaseString)
 	router := mux.NewRouter()
 
 	return &Server{config, db, router}

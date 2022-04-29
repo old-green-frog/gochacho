@@ -1,14 +1,15 @@
 package migrate
 
 import (
-	"database/sql"
 	"io/ioutil"
 	"log"
+
+	"github.com/jmoiron/sqlx"
 )
 
 const MIGRATIONSDIR = "./migrations"
 
-func Migrate(db *sql.DB) {
+func Migrate(db *sqlx.DB) {
 	files, err := ioutil.ReadDir(MIGRATIONSDIR)
 	if err != nil {
 		log.Fatal(err)
